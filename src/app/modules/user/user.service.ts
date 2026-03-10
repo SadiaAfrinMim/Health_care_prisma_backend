@@ -51,6 +51,7 @@ const createAdmin = async (req: Request): Promise<Admin> => {
         password: hashedPassword,
         role: UserRole.ADMIN
     }
+    console.log(userData)
 
     const result = await prisma.$transaction(async (transactionClient) => {
         await transactionClient.user.create({
