@@ -1,9 +1,9 @@
 import express, { NextFunction, Request, Response } from 'express';
 import { SpecialtiesController } from './specialties.controller';
-import { SpecialtiesValidtaion } from './specialties.validation';
 import auth from '../../middlewares/auth';
 import { UserRole } from '@prisma/client';
 import { fileUploader } from '../../helpers/fileUploader';
+import { SpecialtiesValidation } from './specialties.validation';
 
 
 const router = express.Router();
@@ -25,7 +25,7 @@ router.post(
     '/',
     fileUploader.upload.single('file'),
     (req: Request, res: Response, next: NextFunction) => {
-        req.body = SpecialtiesValidtaion.create.parse(JSON.parse(req.body.data))
+        req.body = SpecialtiesValidation.create.parse(JSON.parse(req.body.data))
         return SpecialtiesController.inserIntoDB(req, res, next)
     }
 );
