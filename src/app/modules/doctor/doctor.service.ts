@@ -5,8 +5,9 @@ import { prisma } from "../../shared/prisma";
 import { IDoctorUpdateInput } from "./doctor.interface";
 import ApiError from "../../errors/ApiError";
 import httpStatus from 'http-status';
-import { openai } from "../../helpers/open-router";
+
 import { extractJsonFromMessage } from "../../helpers/extractJsonFromMessage";
+import { openai } from "../../helpers/open-router";
 
 const getAllFromDB = async (filters: any, options: IOptions) => {
     const { page, limit, skip, sortBy, sortOrder } = paginationHelper.calculatePagination(options);
