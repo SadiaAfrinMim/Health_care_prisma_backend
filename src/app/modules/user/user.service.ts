@@ -1,164 +1,70 @@
-import { Request } from "express";
+import { UserRole } from '@prisma/client';
+import express, { NextFunction, Request, Response } from 'express';
+import { fileUploader } from '../../../helper/fileUploader';
+import auth from '../../middlewares/auth';
+import validateRequest from '../../middlewares/validateRequest';
+import { userController } from './user.controller';
+import { userValidation } from './user.validation';
 
-import bcrypt from "bcryptjs";
-import { fileUploader } from "../../helpers/fileUploader";
-import { prisma } from "../../shared/prisma";
-import { paginationHelper } from "../../helpers/paginationHelper";
-import { Admin, Doctor, Prisma, UserRole } from "@prisma/client";
-import { userSearchableFields } from "./user.constant";
+const router = express.Router();
 
+router.get(
+    '/',
+    auth(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+    userController.getAllFromDB
+);
 
-const createPatient = async (req: Request) => {
-   
+router.get(
+    '/me',
+    auth(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DOCTOR, UserRole.PATIENT),
+    userController.getMyProfile
+)
 
-    if (req.file) {
-        const uploadResult = await fileUploader.uploadToCloudinary(req.file)
-        console.log({uploadResult})
-        req.body.patient.profilePhoto = uploadResult?.secure_url
+router.post(
+    "/create-admin",
+    auth(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+    fileUploader.upload.single('file'),
+    (req: Request, res: Response, next: NextFunction) => {
+        req.body = userValidation.createAdmin.parse(JSON.parse(req.body.data))
+        return userController.createAdmin(req, res, next)
     }
+);
 
-    const hashPassword = await bcrypt.hash(req.body.password, 10);
-
-    const result = await prisma.$transaction(async (tnx) => {
-        await tnx.user.create({
-            data: {
-                email: req.body.patient.email,
-                password: hashPassword
-            }
-        });
-
-        return await tnx.patient.create({
-            data: req.body.patient
-        })
-    })
-
-    return result;
-}
-
-const createAdmin = async (req: Request): Promise<Admin> => {
-
-    const file = req.file;
-
-    if (file) {
-        const uploadToCloudinary = await fileUploader.uploadToCloudinary(file);
-        req.body.admin.profilePhoto = uploadToCloudinary?.secure_url
+router.post(
+    "/create-doctor",
+    auth(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+    fileUploader.upload.single('file'),
+    (req: Request, res: Response, next: NextFunction) => {
+        req.body = userValidation.createDoctor.parse(JSON.parse(req.body.data))
+        return userController.createDoctor(req, res, next)
     }
+);
 
-    const hashedPassword: string = await bcrypt.hash(req.body.password, 10)
-
-    const userData = {
-        email: req.body.admin.email,
-        password: hashedPassword,
-        role: UserRole.ADMIN
+router.post(
+    "/create-patient",
+    fileUploader.upload.single('file'),
+    (req: Request, res: Response, next: NextFunction) => {
+        req.body = userValidation.createPatient.parse(JSON.parse(req.body.data))
+        return userController.createPatient(req, res, next)
     }
-    console.log(userData)
+);
 
-    const result = await prisma.$transaction(async (transactionClient) => {
-        await transactionClient.user.create({
-            data: userData
-        });
+router.patch(
+    '/:id/status',
+    auth(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+    validateRequest(userValidation.updateStatus),
+    userController.changeProfileStatus
+);
 
-        const createdAdminData = await transactionClient.admin.create({
-            data: req.body.admin
-        });
-
-        return createdAdminData;
-    });
-
-    return result;
-};
-
-const createDoctor = async (req: Request): Promise<Doctor> => {
-
-    const file = req.file;
-
-    if (file) {
-        const uploadToCloudinary = await fileUploader.uploadToCloudinary(file);
-        req.body.doctor.profilePhoto = uploadToCloudinary?.secure_url
+router.patch(
+    "/update-my-profile",
+    auth(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.DOCTOR, UserRole.PATIENT),
+    fileUploader.upload.single('file'),
+    (req: Request, res: Response, next: NextFunction) => {
+        req.body = JSON.parse(req.body.data)
+        return userController.updateMyProfie(req, res, next)
     }
-    const hashedPassword: string = await bcrypt.hash(req.body.password, 10)
-
-    const userData = {
-        email: req.body.doctor.email,
-        password: hashedPassword,
-        role: UserRole.DOCTOR
-    }
-
-    const result = await prisma.$transaction(async (transactionClient) => {
-        await transactionClient.user.create({
-            data: userData
-        });
-
-        const createdDoctorData = await transactionClient.doctor.create({
-            data: req.body.doctor
-        });
-
-        return createdDoctorData;
-    });
-
-    return result;
-};
+);
 
 
-const getAllFromDB = async(params:any,options:any) =>{
-   const {page,limit,skip,sortBy,sortOrder} = paginationHelper.calculatePagination(options)
-   const {searchTerm, ...filterData} = params;
-   const andConditions : Prisma.UserWhereInput[] = [];
-   if(searchTerm){
-     andConditions.push({
-         OR:userSearchableFields.map(field =>({
-        [field] : {
-            contains: searchTerm,
-            mode:"insensitive"
-
-        }
-      }))
-     })
-   }
-   if(Object.keys(filterData).length>0){
-    andConditions.push({
-        AND : Object.keys(filterData).map(key=>({
-            [key]:{
-                equals:(filterData as any)[key]
-            }
-
-        }))
-    })
-
-   }
- const whereConditions: Prisma.UserWhereInput =
-  andConditions.length > 0
-    ? { AND: andConditions }
-    : {};
-
-    const result = await prisma.user.findMany({
-        skip,
-        take:limit,
-        where: whereConditions,
-     orderBy: {[sortBy]: sortOrder }
-
-    });
-    const total = await prisma.user.count({
-        where: whereConditions
-    })
-      
-  
-   
-    return {
-        meta:{
-            page,
-            limit,
-            total
-        },
-        data:result
-    }
-   
-
-}
-
-export const UserService = {
-    createPatient,
-    getAllFromDB,
-    createAdmin,
-    createDoctor
-}
+export const userRoutes = router;

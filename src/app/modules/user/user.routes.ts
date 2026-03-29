@@ -1,46 +1,34 @@
-import  { NextFunction, Request, Response } from 'express'
-import express from "express";
-import path from 'path'
-import { UserController } from './user.controller'
-import { fileUploader } from '../../helpers/fileUploader'
-import { UserValidation } from './user.validation'
-import { UserRole } from '@prisma/client';
-import auth from '../../middlewares/auth';
+import { NextFunction, Request, Response } from "express";
+import httpStatus from "http-status";
+import { Secret } from "jsonwebtoken";
+import config from "../../config";
+import { jwtHelpers } from "../../helper/jwtHelper";
+import ApiError from "../errors/ApiError";
 
-const router = express.Router()
 
-router.get("/",
-    auth(UserRole.ADMIN),
-    UserController.getAllFromDB)
-router.post("/create-patient",
-    fileUploader.upload.single('file'),
-    (req:Request,res:Response,next:NextFunction)=>{
-        req.body =  UserValidation.createPatientValidationSchema.parse(JSON.parse(req.body.data))
-        return UserController.createPatient(req,res,next)
-    },
-    UserController.createPatient)
+const auth = (...roles: string[]) => {
+    return async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
+        try {
+            const token = req.headers.authorization || req.cookies.accessToken;
+            console.log({ token }, "from auth guard");
 
-   router.post(
-    "/create-admin",
-    auth(UserRole.ADMIN),
-    fileUploader.upload.single('file'),
-    (req: Request, res: Response, next: NextFunction) => {
-        req.body = UserValidation.createAdminValidationSchema.parse(JSON.parse(req.body.data))
-        return UserController.createAdmin(req, res, next)
+            if (!token) {
+                throw new ApiError(httpStatus.UNAUTHORIZED, "You are not authorized!")
+            }
+
+            const verifiedUser = jwtHelpers.verifyToken(token, config.jwt.jwt_secret as Secret)
+
+            req.user = verifiedUser;
+
+            if (roles.length && !roles.includes(verifiedUser.role)) {
+                throw new ApiError(httpStatus.FORBIDDEN, "Forbidden!")
+            }
+            next()
+        }
+        catch (err) {
+            next(err)
+        }
     }
-);
+};
 
-router.post(
-    "/create-doctor",
-    auth(UserRole.ADMIN),
-    fileUploader.upload.single('file'),
-    (req: Request, res: Response, next: NextFunction) => {
-        console.log(JSON.parse(req.body.data))
-        req.body = UserValidation.createDoctorValidationSchema.parse(JSON.parse(req.body.data))
-        return UserController.createDoctor(req, res, next)
-    }
-);
-
-
-
-export const userRoutes = router
+export default auth;
