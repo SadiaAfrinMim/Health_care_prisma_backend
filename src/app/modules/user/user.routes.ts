@@ -1,34 +1,70 @@
-import { NextFunction, Request, Response } from "express";
-import httpStatus from "http-status";
-import { Secret } from "jsonwebtoken";
-import config from "../../config";
-import { jwtHelpers } from "../../helper/jwtHelper";
-import ApiError from "../errors/ApiError";
+import express, { NextFunction, Request, Response } from 'express'
+
+import { UserValidation } from './user.validation';
+import { UserRole } from '@prisma/client';
+import auth from '../../middlewares/auth';
+import { UserController } from './user.controller';
+import { fileUploader } from '../../helpers/fileUploader';
 
 
-const auth = (...roles: string[]) => {
-    return async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
-        try {
-            const token = req.headers.authorization || req.cookies.accessToken;
-            console.log({ token }, "from auth guard");
+const router = express.Router();
 
-            if (!token) {
-                throw new ApiError(httpStatus.UNAUTHORIZED, "You are not authorized!")
-            }
+router.get(
+    "/",
+    auth(UserRole.ADMIN),
+    UserController.getAllFromDB
+)
 
-            const verifiedUser = jwtHelpers.verifyToken(token, config.jwt.jwt_secret as Secret)
+router.get(
+    '/me',
+    auth(UserRole.ADMIN, UserRole.DOCTOR, UserRole.PATIENT),
+    UserController.getMyProfile
+)
 
-            req.user = verifiedUser;
-
-            if (roles.length && !roles.includes(verifiedUser.role)) {
-                throw new ApiError(httpStatus.FORBIDDEN, "Forbidden!")
-            }
-            next()
-        }
-        catch (err) {
-            next(err)
-        }
+router.post(
+    "/create-patient",
+    fileUploader.upload.single('file'),
+    (req: Request, res: Response, next: NextFunction) => {
+        req.body = UserValidation.createPatientValidationSchema.parse(JSON.parse(req.body.data))
+        return UserController.createPatient(req, res, next)
     }
-};
+)
 
-export default auth;
+router.post(
+    "/create-admin",
+    auth(UserRole.ADMIN),
+    fileUploader.upload.single('file'),
+    (req: Request, res: Response, next: NextFunction) => {
+        req.body = UserValidation.createAdminValidationSchema.parse(JSON.parse(req.body.data))
+        return UserController.createAdmin(req, res, next)
+    }
+);
+
+router.post(
+    "/create-doctor",
+    auth(UserRole.ADMIN),
+    fileUploader.upload.single('file'),
+    (req: Request, res: Response, next: NextFunction) => {
+        console.log(JSON.parse(req.body.data))
+        req.body = UserValidation.createDoctorValidationSchema.parse(JSON.parse(req.body.data))
+        return UserController.createDoctor(req, res, next)
+    }
+);
+
+router.patch(
+    '/:id/status',
+    auth(UserRole.ADMIN),
+    UserController.changeProfileStatus
+);
+
+router.patch(
+    "/update-my-profile",
+    auth(UserRole.ADMIN, UserRole.DOCTOR, UserRole.PATIENT),
+    fileUploader.upload.single('file'),
+    (req: Request, res: Response, next: NextFunction) => {
+        req.body = JSON.parse(req.body.data)
+        return UserController.updateMyProfie(req, res, next)
+    }
+);
+
+export const userRoutes = router;

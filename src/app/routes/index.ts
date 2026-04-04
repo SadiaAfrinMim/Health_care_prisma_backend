@@ -1,10 +1,11 @@
 import express from 'express';
-import { userRoutes } from '../modules/user/user.routes';
+
 import { authRoutes } from '../modules/auth/auth.routes';
 import { ScheduleRoutes } from '../modules/schedule/schedule.routes';
 import { doctorScheduleRoutes } from '../modules/doctorSchedule/doctorSchedule.routes';
 import { SpecialtiesRoutes } from '../modules/specialties/specialties.router';
 import { DoctorRoutes } from '../modules/doctor/doctor.routes';
+import { userRoutes } from '../modules/user/user.routes';
 
 
 
